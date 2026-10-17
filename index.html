@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#f4f1e9" />
+<title>AI Hangman</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='38' fill='%231f6b57'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --bg: #f4f1e9;
+    --panel: #fffdf8;
+    --panel-2: #f7f3ea;
+    --line: #e3ddcf;
+    --text: #23211d;
+    --muted: #6f695e;
+    --accent: #1f6b57;
+    --accent-soft: rgba(31, 107, 87, .10);
+    --warn: #9a5b00;
+    --danger: #b04334;
+    --radius: 16px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(900px 460px at 50% -12%, #fffdf8 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    position: relative;
+    width: min(860px, 100%);
+    padding: 26px 28px 24px;
+    background: var(--panel);
+    border: 1px solid #e7e1d4;
+    border-radius: var(--radius);
+    box-shadow: 0 24px 60px rgba(58, 48, 30, .12);
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    font-size: 13px;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+  }
+
+  .stats {
+    font-size: 11px;
+    letter-spacing: .12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .stats b { color: var(--text); font-weight: 600; }
+
+  main {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 28px;
+    padding: 26px 0 4px;
+    align-items: center;
+  }
+
+  /* ---------- gallows ---------- */
+  .stage { display: flex; flex-direction: column; gap: 14px; align-items: center; }
+
+  .gallows { width: 100%; max-width: 210px; height: auto; }
+  .gallows .frame { stroke: #b9b0a0; stroke-width: 5; stroke-linecap: round; fill: none; }
+  .gallows .part {
+    stroke: var(--accent);
+    stroke-width: 5;
+    stroke-linecap: round;
+    fill: none;
+    opacity: 0;
+    transform: scale(1);
+    transition: opacity .18s ease, stroke .18s ease;
+  }
+  .gallows .part.show { opacity: 1; }
+  .gallows.danger .part.show { stroke: var(--danger); }
+  .gallows .head { fill: rgba(31, 107, 87, .07); }
+
+  .lives {
+    display: flex; align-items: center; gap: 7px;
+  }
+  .life {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ddd5c5;
+  }
+  .life.on { background: var(--accent); }
+  .gallows.danger + .lives .life.on { background: var(--danger); }
+
+  /* ---------- board ---------- */
+  .board { display: flex; flex-direction: column; gap: 16px; }
+
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+
+  .tag {
+    font-size: 10px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .word {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  .slot {
+    width: 30px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 3px solid #b9b0a0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    transition: border-color .2s ease, color .2s ease;
+  }
+  .slot.filled { border-bottom-color: var(--accent); }
+  .slot.hint { color: var(--warn); }
+
+  .ai-panel {
+    padding: 12px 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ai-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .ai-line.note { justify-content: flex-start; gap: 12px; }
+
+  .ai-line strong { color: var(--text); font-weight: 600; }
+  .ai-line .label {
+    font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); white-space: nowrap;
+  }
+
+  .meter {
+    height: 5px;
+    border-radius: 3px;
+    background: #e9e3d6;
+    overflow: hidden;
+  }
+  .meter > div {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #1f6b57, #5aa78f);
+    transition: width .3s ease;
+  }
+
+  /* ---------- keyboard ---------- */
+  .keyboard {
+    display: grid;
+    grid-template-columns: repeat(13, 1fr);
+    gap: 6px;
+  }
+
+  .key {
+    height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #fffefa;
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease, transform .08s ease;
+  }
+  .key:hover:not(:disabled) { border-color: #c9c0ae; background: #f6f2e9; }
+  .key:active:not(:disabled) { transform: translateY(1px); }
+  .key:disabled { cursor: default; }
+  .key.correct { background: var(--accent-soft); border-color: rgba(31, 107, 87, .42); color: #1a5a49; }
+  .key.wrong { background: rgba(176, 67, 52, .08); border-color: rgba(176, 67, 52, .34); color: #a03a2b; }
+
+  /* ---------- actions ---------- */
+  .actions { display: flex; gap: 10px; }
+
+  .btn {
+    flex: 1;
+    height: 42px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, color .15s ease;
+  }
+  .btn:hover:not(:disabled) { border-color: #c9c0ae; background: #f6f2e9; }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fffdf8;
+  }
+  .btn.primary:hover:not(:disabled) { background: #2a7f68; border-color: #2a7f68; }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  /* ---------- overlay ---------- */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    border-radius: var(--radius);
+    background: rgba(244, 241, 233, .78);
+    backdrop-filter: blur(6px);
+    z-index: 5;
+  }
+  .overlay[hidden] { display: none; }
+
+  .card {
+    width: min(400px, 100%);
+    padding: 26px;
+    text-align: center;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 18px 44px rgba(58, 48, 30, .18);
+  }
+
+  .card h2 {
+    margin: 10px 0 8px;
+    font-size: 24px;
+    letter-spacing: .01em;
+  }
+  .card p { margin: 0 0 6px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+  .card .word-reveal {
+    margin: 14px 0 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 22px;
+    letter-spacing: .22em;
+    color: var(--accent);
+  }
+  .card .note { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  .card .btn { width: 100%; }
+  .badge {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  footer {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    color: #7a7263;
+  }
+
+  @media (max-width: 680px) {
+    body { padding: 12px; }
+    .app { padding: 18px; }
+    main { grid-template-columns: 1fr; gap: 18px; }
+    .stage { flex-direction: column; gap: 10px; }
+    .gallows { max-width: 148px; }
+    .keyboard { grid-template-columns: repeat(7, 1fr); }
+    .slot { width: 24px; height: 40px; font-size: 21px; }
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand"><span class="dot"></span> AI Hangman</div>
+      <div class="stats" id="stats">Wins <b>0</b> &nbsp;·&nbsp; Losses <b>0</b> &nbsp;·&nbsp; Streak <b>0</b></div>
+    </header>
+
+    <main>
+      <section class="stage">
+        <svg class="gallows" id="gallows" viewBox="0 0 220 240" role="img" aria-label="Hangman drawing">
+          <path class="frame" d="M30 220 H130" />
+          <path class="frame" d="M60 220 V30" />
+          <path class="frame" d="M60 30 H150" />
+          <path class="frame" d="M150 30 V52" />
+          <circle class="part head" id="p1" cx="150" cy="70" r="17" />
+          <line class="part" id="p2" x1="150" y1="87" x2="150" y2="140" />
+          <line class="part" id="p3" x1="150" y1="100" x2="126" y2="124" />
+          <line class="part" id="p4" x1="150" y1="100" x2="174" y2="124" />
+          <line class="part" id="p5" x1="150" y1="140" x2="126" y2="174" />
+          <line class="part" id="p6" x1="150" y1="140" x2="174" y2="174" />
+        </svg>
+        <div class="lives" id="lives" aria-label="Lives remaining"></div>
+      </section>
+
+      <section class="board">
+        <div class="row">
+          <span class="tag">Word</span>
+          <span class="tag" id="category">Category</span>
+        </div>
+
+        <div class="word" id="word" aria-label="Hidden word"></div>
+
+        <div class="ai-panel">
+          <div class="ai-line note">
+            <span class="label">AI</span>
+            <span id="aiNote"><strong>Ready.</strong> Guess a letter to begin.</span>
+          </div>
+          <div class="meter" aria-hidden="true"><div id="confidenceFill"></div></div>
+          <div class="ai-line">
+            <span id="aiMeta">AI confidence 0%</span>
+            <span id="livesLeft">6 lives left</span>
+          </div>
+        </div>
+
+        <div class="keyboard" id="keyboard"></div>
+
+        <div class="actions">
+          <button class="btn primary" id="hintBtn" type="button">AI Hint · 3</button>
+          <button class="btn" id="newBtn" type="button">New Word</button>
+        </div>
+      </section>
+    </main>
+
+
+
+    <div class="overlay" id="overlay" hidden>
+      <div class="card" role="dialog" aria-modal="true">
+        <span class="badge" id="resultBadge">Result</span>
+        <h2 id="resultTitle">You win</h2>
+        <p id="resultText">The word was:</p>
+        <div class="word-reveal" id="resultWord">WORD</div>
+        <p class="note" id="resultNote"></p>
+        <button class="btn primary" id="againBtn" type="button">Play Again</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  /* ==========================================================
+     AI Hangman — one file, no libraries.
+     The "AI" is a small inference engine:
+       1. keep a list of every word that still fits the guesses
+       2. suggest the letter that occurs in the most candidates
+          (a cheap information-gain / frequency heuristic)
+     ========================================================== */
+
+  const WORDS = [
+    { word: "NEURAL",   category: "AI & Computing" },
+    { word: "ROBOT",    category: "AI & Computing" },
+    { word: "MODEL",    category: "AI & Computing" },
+    { word: "TENSOR",   category: "AI & Computing" },
+    { word: "PIXEL",    category: "AI & Computing" },
+    { word: "CACHE",    category: "AI & Computing" },
+    { word: "LOGIC",    category: "AI & Computing" },
+    { word: "AGENT",    category: "AI & Computing" },
+    { word: "TOKEN",    category: "AI & Computing" },
+    { word: "QUERY",    category: "AI & Computing" },
+    { word: "BINARY",   category: "AI & Computing" },
+    { word: "VECTOR",   category: "AI & Computing" },
+    { word: "SERVER",   category: "AI & Computing" },
+    { word: "CLOUD",    category: "AI & Computing" },
+    { word: "SENSOR",   category: "AI & Computing" },
+    { word: "GRAVITY",  category: "Science" },
+    { word: "OXYGEN",   category: "Science" },
+    { word: "PROTON",   category: "Science" },
+    { word: "NEUTRON",  category: "Science" },
+    { word: "CIRCUIT",  category: "Science" },
+    { word: "MAGNET",   category: "Science" },
+    { word: "ENERGY",   category: "Science" },
+    { word: "PLASMA",   category: "Science" },
+    { word: "GENOME",   category: "Science" },
+    { word: "LASER",    category: "Science" },
+    { word: "FOREST",   category: "Nature" },
+    { word: "OCEAN",    category: "Nature" },
+    { word: "RIVER",    category: "Nature" },
+    { word: "TIGER",    category: "Nature" },
+    { word: "VOLCANO",  category: "Nature" },
+    { word: "DESERT",   category: "Nature" },
+    { word: "CORAL",    category: "Nature" },
+    { word: "MEADOW",   category: "Nature" },
+    { word: "THUNDER",  category: "Nature" },
+    { word: "FALCON",   category: "Nature" },
+    { word: "GUITAR",   category: "Everyday" },
+    { word: "CAMERA",   category: "Everyday" },
+    { word: "COFFEE",   category: "Everyday" },
+    { word: "BICYCLE",  category: "Everyday" },
+    { word: "LIBRARY",  category: "Everyday" },
+    { word: "ORANGE",   category: "Everyday" },
+    { word: "PLANET",   category: "Everyday" },
+    { word: "ROCKET",   category: "Everyday" },
+    { word: "WINTER",   category: "Everyday" },
+    { word: "PENCIL",   category: "Everyday" },
+    { word: "BRIDGE",   category: "Everyday" },
+    { word: "ISLAND",   category: "Everyday" },
+    { word: "COMPUTER", category: "AI & Computing" },
+    { word: "KEYBOARD", category: "AI & Computing" },
+    { word: "MOUNTAIN", category: "Nature" },
+    { word: "ELEPHANT", category: "Nature" },
+    { word: "SANDWICH", category: "Everyday" },
+    { word: "NOTEBOOK", category: "Everyday" }
+  ];
+
+  const MAX_WRONG = 6;
+  const MAX_HINTS = 3;
+  const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const STORAGE_KEY = "ai-hangman-stats";
+
+  const el = {
+    gallows: document.getElementById("gallows"),
+    lives: document.getElementById("lives"),
+    word: document.getElementById("word"),
+    category: document.getElementById("category"),
+    keyboard: document.getElementById("keyboard"),
+    aiNote: document.getElementById("aiNote"),
+    aiMeta: document.getElementById("aiMeta"),
+    confidenceFill: document.getElementById("confidenceFill"),
+    livesLeft: document.getElementById("livesLeft"),
+    hintBtn: document.getElementById("hintBtn"),
+    newBtn: document.getElementById("newBtn"),
+    stats: document.getElementById("stats"),
+    overlay: document.getElementById("overlay"),
+    resultBadge: document.getElementById("resultBadge"),
+    resultTitle: document.getElementById("resultTitle"),
+    resultText: document.getElementById("resultText"),
+    resultWord: document.getElementById("resultWord"),
+    resultNote: document.getElementById("resultNote"),
+    againBtn: document.getElementById("againBtn")
+  };
+
+  const parts = ["p1", "p2", "p3", "p4", "p5", "p6"].map(id => document.getElementById(id));
+
+  let stats = loadStats();
+  let state = null;
+
+  /* ---------- setup ---------- */
+
+  function loadStats() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (saved && typeof saved.wins === "number") {
+        return { wins: saved.wins, losses: saved.losses || 0, streak: saved.streak || 0 };
+      }
+    } catch (err) { /* storage unavailable — play without persistence */ }
+    return { wins: 0, losses: 0, streak: 0 };
+  }
+
+  function saveStats() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)); } catch (err) {}
+  }
+
+  function buildKeyboard() {
+    el.keyboard.innerHTML = "";
+    ALPHABET.forEach(letter => {
+      const btn = document.createElement("button");
+      btn.className = "key";
+      btn.type = "button";
+      btn.textContent = letter;
+      btn.dataset.letter = letter;
+      btn.setAttribute("aria-label", "Guess " + letter);
+      btn.addEventListener("click", () => guess(letter));
+      el.keyboard.appendChild(btn);
+    });
+  }
+
+  function newGame() {
+    let pick = WORDS[Math.floor(Math.random() * WORDS.length)];
+    if (state && WORDS.length > 1) {
+      while (pick.word === state.word) {
+        pick = WORDS[Math.floor(Math.random() * WORDS.length)];
+      }
+    }
+
+    state = {
+      word: pick.word,
+      category: pick.category,
+      guessed: new Set(),
+      wrong: 0,
+      hintsLeft: MAX_HINTS,
+      over: false,
+      hinted: new Set()
+    };
+
+    el.overlay.hidden = true;
+    setNote("<strong>Ready.</strong> Guess a letter to begin.");
+    render();
+  }
+
+  /* ---------- the AI part ---------- */
+
+  // Every word that is still compatible with the player's guesses.
+  // A candidate must (a) match the revealed pattern and (b) contain no wrong letters.
+  function candidateWords() {
+    return WORDS.map(entry => entry.word).filter(candidate => {
+      if (candidate.length !== state.word.length) return false;
+
+      for (let i = 0; i < candidate.length; i++) {
+        const ch = state.word[i];
+        if (state.guessed.has(ch) && candidate[i] !== ch) return false;
+      }
+
+      for (const letter of state.guessed) {
+        if (!state.word.includes(letter) && candidate.includes(letter)) return false;
+      }
+      return true;
+    });
+  }
+
+  // Pick the unguessed letter that appears in the most remaining candidates.
+  // Ties are broken by overall frequency, then alphabetically for stability.
+  function bestHintLetter(candidates) {
+    const notGuessed = letter => !state.guessed.has(letter);
+    const wordLetters = [...new Set(state.word.split("").filter(notGuessed))];
+    if (wordLetters.length === 0) return null;
+
+    let best = null;
+    let bestScore = -1;
+
+    wordLetters.forEach(letter => {
+      const score = candidates.filter(candidate => candidate.includes(letter)).length;
+      if (score > bestScore || (score === bestScore && best && letter < best)) {
+        best = letter;
+        bestScore = score;
+      }
+    });
+
+    return best;
+  }
+
+  function aiHint() {
+    if (state.over) return;
+
+    if (state.hintsLeft <= 0) {
+      setNote("No AI hints left for this word.");
+      return;
+    }
+
+    const candidates = candidateWords();
+    const letter = bestHintLetter(candidates);
+    if (!letter) return;
+
+    const covered = candidates.filter(candidate => candidate.includes(letter)).length;
+    state.hintsLeft--;
+    state.hinted.add(letter);
+
+    setNote(
+      "AI reveals <strong>" + letter + "</strong> — found in " +
+      covered + " of " + candidates.length + " candidate word" + (candidates.length === 1 ? "" : "s") + "."
+    );
+
+    applyGuess(letter);
+  }
+
+  /* ---------- game flow ---------- */
+
+  function guess(letter) {
+    if (!state || state.over || state.guessed.has(letter)) return;
+    applyGuess(letter);
+  }
+
+  function applyGuess(letter) {
+    state.guessed.add(letter);
+
+    if (!state.word.includes(letter)) {
+      state.wrong++;
+      setNote("<strong>" + letter + "</strong> is not in the word. " + (MAX_WRONG - state.wrong) + " lives left.");
+    } else if (!state.hinted.has(letter)) {
+      const found = (state.word.match(new RegExp(letter, "g")) || []).length;
+      setNote("<strong>" + letter + "</strong> appeared " + found + " time" + (found === 1 ? "" : "s") + ".");
+    }
+
+    const solved = state.word.split("").every(ch => state.guessed.has(ch));
+
+    if (solved) {
+      state.over = true;
+      stats.wins++;
+      stats.streak++;
+      saveStats();
+      render();
+      showResult(true);
+      return;
+    }
+
+    if (state.wrong >= MAX_WRONG) {
+      state.over = true;
+      stats.losses++;
+      stats.streak = 0;
+      saveStats();
+      render();
+      showResult(false);
+      return;
+    }
+
+    render();
+  }
+
+  function setNote(html) {
+    el.aiNote.innerHTML = html;
+  }
+
+  function render() {
+    // word slots
+    el.word.innerHTML = "";
+    state.word.split("").forEach(ch => {
+      const slot = document.createElement("span");
+      const known = state.guessed.has(ch);
+      slot.className = "slot" + (known ? " filled" : "") + (known && state.hinted.has(ch) ? " hint" : "");
+      slot.textContent = known ? ch : "";
+      el.word.appendChild(slot);
+    });
+
+    // hangman parts
+    parts.forEach((part, index) => {
+      part.classList.toggle("show", state.wrong > index);
+    });
+    el.gallows.classList.toggle("danger", state.wrong >= MAX_WRONG - 1);
+
+    // lives
+    el.lives.innerHTML = "";
+    for (let i = 0; i < MAX_WRONG; i++) {
+      const bar = document.createElement("span");
+      bar.className = "life" + (i < MAX_WRONG - state.wrong ? " on" : "");
+      el.lives.appendChild(bar);
+    }
+    el.livesLeft.textContent = (MAX_WRONG - state.wrong) + " lives left";
+
+    // keyboard
+    [...el.keyboard.children].forEach(btn => {
+      const letter = btn.dataset.letter;
+      const used = state.guessed.has(letter);
+      btn.disabled = used || state.over;
+      btn.classList.toggle("correct", used && state.word.includes(letter));
+      btn.classList.toggle("wrong", used && !state.word.includes(letter));
+    });
+
+    // category + scoreboard
+    el.category.textContent = state.category;
+    el.stats.innerHTML =
+      "Wins <b>" + stats.wins + "</b> &nbsp;·&nbsp; Losses <b>" + stats.losses +
+      "</b> &nbsp;·&nbsp; Streak <b>" + stats.streak + "</b>";
+
+    // AI panel
+    const candidates = candidateWords();
+    const confidence = confidenceFor(candidates.length);
+    el.confidenceFill.style.width = confidence + "%";
+    el.aiMeta.textContent = "AI confidence " + confidence + "% · " + candidates.length +
+      " candidate" + (candidates.length === 1 ? "" : "s");
+
+    el.hintBtn.textContent = "AI Hint · " + state.hintsLeft;
+    el.hintBtn.disabled = state.hintsLeft <= 0 || state.over;
+  }
+
+  function confidenceFor(candidateCount) {
+    const pool = WORDS.filter(entry => entry.word.length === state.word.length).length;
+    if (pool <= 1) return 100;
+    return Math.round(100 * (1 - (candidateCount - 1) / (pool - 1)));
+  }
+
+  function showResult(won) {
+    const candidates = candidateWords();
+    el.resultBadge.textContent = won ? "Solved" : "Out of lives";
+    el.resultBadge.style.color = won ? "var(--accent)" : "var(--danger)";
+    el.resultBadge.style.background = won ? "rgba(31,107,87,.10)" : "rgba(176,67,52,.10)";
+    el.resultTitle.textContent = won ? "You beat the AI" : "The AI stumped you";
+    el.resultText.textContent = won
+      ? "Nice work. The word was:"
+      : "The word was:";
+    el.resultWord.textContent = state.word;
+    el.resultNote.textContent = won
+      ? "Solved with " + (MAX_WRONG - state.wrong) + " lives to spare and " + state.hintsLeft + " hints left."
+      : "The AI narrowed it to " + candidates.length + " candidate word" + (candidates.length === 1 ? "" : "s") + ".";
+    el.overlay.hidden = false;
+    el.againBtn.focus();
+  }
+
+  /* ---------- wiring ---------- */
+
+  el.hintBtn.addEventListener("click", aiHint);
+  el.newBtn.addEventListener("click", newGame);
+  el.againBtn.addEventListener("click", newGame);
+
+  document.addEventListener("keydown", event => {
+    if (!el.overlay.hidden) {
+      if (event.key === "Enter") newGame();
+      return;
+    }
+    if (/^[a-zA-Z]$/.test(event.key)) guess(event.key.toUpperCase());
+  });
+
+  buildKeyboard();
+  newGame();
+
+  // Small hook so the game can be driven from the console or an automated check.
+  window.aiHangman = {
+    guess,
+    aiHint,
+    newGame,
+    getState: () => ({
+      word: state.word,
+      guessed: [...state.guessed],
+      wrong: state.wrong,
+      hintsLeft: state.hintsLeft,
+      over: state.over,
+      candidates: candidateWords()
+    })
+  };
+</script>
+</body>
+</html>
